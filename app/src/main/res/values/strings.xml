@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Flickey</string>
+    <string name="ime_subtype">ko</string>
+    <string name="ime_name">Flickey_keyboard</string>
+</resources>
