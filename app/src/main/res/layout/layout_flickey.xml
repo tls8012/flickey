@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="250dp"
+    android:orientation="horizontal"
+    android:background="#FFFFFF"
+    android:id="@+id/keyboard_root">
+
+    <!-- Sidebar -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:padding="4dp"
+        android:gravity="center_horizontal">
+
+        <Button
+            android:id="@+id/btn_layer_toggle"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:text="한/영"
+            android:textSize="14sp"
+            android:layout_marginBottom="4dp"/>
+
+        <Button
+            android:id="@+id/btn_layer_custom"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:text="L3"
+            android:textSize="14sp"
+            android:layout_marginBottom="4dp"/>
+
+        <Button
+            android:id="@+id/btn_layer_special"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:text="123"
+            android:textSize="14sp"
+            android:layout_marginBottom="4dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <Button
+                android:id="@+id/btn_cursor_left"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="&lt;"
+                android:textSize="18sp"/>
+            <Button
+                android:id="@+id/btn_cursor_right"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="&gt;"
+                android:textSize="18sp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- Main Knob Area -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="3"
+        android:padding="8dp">
+
+        <!-- Consonant Knob (Large, Top Right) -->
+        <com.example.flickey.FlickKnob
+            android:id="@+id/knob_consonant"
+            android:layout_width="140dp"
+            android:layout_height="140dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintBottom_toTopOf="@+id/knob_punctuation"
+            android:layout_marginBottom="8dp"/>
+
+        <!-- Vowel Knob (Medium, Center/Left) -->
+        <com.example.flickey.FlickKnob
+            android:id="@+id/knob_vowel"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/knob_punctuation"/>
+
+        <!-- Punctuation Knob (Small, Bottom Right) -->
+        <com.example.flickey.FlickKnob
+            android:id="@+id/knob_punctuation"
+            android:layout_width="100dp"
+            android:layout_height="100dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"/>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</LinearLayout>

@@ -9,9 +9,7 @@ import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import kotlin.math.atan2
-import kotlin.math.max
 import kotlin.math.min
 
 class FlickKnob(
@@ -21,15 +19,49 @@ class FlickKnob(
     private var isDragging = false
     private var flickStartX = 0f
     private var flickStartY = 0f
+    private var isTapCandidate = false
 
-    var centerX: Float = (width/2).toFloat()
-    var centerY: Float = (height/2).toFloat()
-    var directionMap = listOf<String>("a","b","c","d","e","f","g","h")
-    val radius: Float = 100f
+    private var centerX: Float = 0f
+    private var centerY: Float = 0f
+    private var currentConfig: KnobConfig? = null
+    
+    // Configurable radius
+    var knobRadius: Float = 100f
 
-    fun setMap(map: List<String>) {
-        directionMap = map
-        return
+    var onFlick: ((String) -> Unit)? = null
+    var onTap: (() -> Unit)? = null
+
+    // Paint objects
+    private val circlePaint = Paint().apply {
+        color = Color.parseColor("#DDDDDD") // Default Light Gray
+        style = Paint.Style.STROKE
+        strokeWidth = 10f
+        isAntiAlias = true
+    }
+    
+    private val textPaint = Paint().apply {
+        color = Color.BLACK
+        textSize = 40f
+        textAlign = Paint.Align.CENTER
+        isAntiAlias = true
+    }
+
+    fun setConfig(config: KnobConfig) {
+        currentConfig = config
+        invalidate()
+    }
+
+    fun setKnobColor(color: Int) {
+        circlePaint.color = color
+        invalidate()
+    }
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        centerX = w / 2f
+        centerY = h / 2f
+        // Dynamic radius based on size, keeping some padding
+        knobRadius = (min(w, h) / 2f) * 0.8f
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -37,81 +69,96 @@ class FlickKnob(
             MotionEvent.ACTION_DOWN -> {
                 val dx = event.x - centerX
                 val dy = event.y - centerY
-                if (dx*dx + dy*dy <= radius*radius) {
+                if (dx * dx + dy * dy <= knobRadius * knobRadius) {
                     isDragging = true
+                    isTapCandidate = true
                     flickStartX = event.x
                     flickStartY = event.y
+                    return true
                 }
             }
             MotionEvent.ACTION_MOVE -> {
                 if (isDragging) {
-                    centerX = min(max(event.x, radius), width - radius)
-                    centerY = min(max(event.y, radius), height - radius)
+                    val dx = event.x - flickStartX
+                    val dy = event.y - flickStartY
+                    val dist = Math.sqrt((dx * dx + dy * dy).toDouble())
+                    
+                    // If moved beyond a threshold, it's not a tap
+                    if (dist > 20) {
+                        isTapCandidate = false
+                    }
                     invalidate()
                 }
             }
             MotionEvent.ACTION_UP -> {
                 if (isDragging) {
                     val dx = event.x - flickStartX
-                    val dy = flickStartY - event.y
-                    val angle = Math.toDegrees(atan2(dy, dx).toDouble()).let {
-                        if (it < 0) it + 360 else it
+                    val dy = flickStartY - event.y // Y is inverted on screen
+                    val dist = Math.sqrt((dx * dx + dy * dy).toDouble())
+
+                    if (isTapCandidate && dist < 20) {
+                        // It's a Tap
+                        onTap?.invoke()
+                        performClick()
+                    } else {
+                        // It's a Flick
+                        val angle = Math.toDegrees(atan2(dy, dx).toDouble()).let {
+                            if (it < 0) it + 360 else it
+                        }
+                        // Map angle to 0-7
+                        val direction = ((angle + 22.5) / 45).toInt() % 8
+                        
+                        currentConfig?.directions?.getOrNull(direction)?.let { output ->
+                            onFlick?.invoke(output)
+                        }
                     }
-                    val direction = ((angle + 22.5) / 45).toInt() % 8
+                    
                     isDragging = false
-                    val output = directionMap[direction]
-                    (context as? FlickeyActionListener)?.onTextInput(output)
-                    centerX = (width/2).toFloat()
-                    centerY = (height/2).toFloat()
-                    performClick()
+                    invalidate()
                 }
             }
         }
         return true
     }
+
     override fun performClick(): Boolean {
         super.performClick()
-        // 혹시 클릭 처리 로직 따로 하고 싶으면 여기에
         return true
     }
 
-    val paint = Paint().apply {
-        color = Color.BLUE
-        style = Paint.Style.STROKE
-        strokeWidth = 10f
-    }
     override fun onDraw(canvas: Canvas) {
-        canvas.drawCircle(centerX, centerY, radius, paint)
-    }
-}
-
-class FlickeyView2(context: Context, attrs: AttributeSet?) : ViewGroup(context, attrs) {
-    private val knob1 = FlickKnob(context, attrs)
-    private val knob2 = FlickKnob(context, attrs)
-
-    init {
-        addView(knob1)
-        addView(knob2)
-        knob1.setMap("ijklmnop".map { it.toString() })
-        knob2.setMap("qrstuvwx".map { it.toString() }) // to load from preferences
-    }
-
-    override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        // 예: knob1은 오른쪽 아래
-        val size = 120 * resources.displayMetrics.density.toInt() // 400dp
-        knob1.layout(width - size, height - size, width, height)
-        // knob2는 바로 위쪽
-        knob2.layout(width - size, height - 2*size - 20, width, height - size - 20)
-    }
-
-    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
-        val minWidth = MeasureSpec.getSize(widthMeasureSpec)
-        val maxHeight = 300 * resources.displayMetrics.density // 400dp
-        // knob1, knob2 모두 크기 측정
-        for (i in 0 until childCount) {
-            measureChild(getChildAt(i), widthMeasureSpec, heightMeasureSpec)
+        super.onDraw(canvas)
+        
+        // Draw Background Circle
+        canvas.drawCircle(centerX, centerY, knobRadius, circlePaint)
+        
+        // Draw Center Label
+        currentConfig?.centerLabel?.let { label ->
+            // Adjust text position to center vertically
+            val textY = centerY - ((textPaint.descent() + textPaint.ascent()) / 2)
+            canvas.drawText(label, centerX, textY, textPaint)
         }
-        setMeasuredDimension(minWidth, maxHeight.toInt())
+
+        // Draw Direction Labels (Small)
+        currentConfig?.directions?.forEachIndexed { index, label ->
+            if (label != null) {
+                // Angle for index: 0 = Right, 1 = UR ... (CCW)
+                // My KeyMappings are CCW starting from Right.
+                val angleRad = Math.toRadians((index * 45).toDouble())
+                // Canvas Y is down-positive.
+                // Right (0): x+, y0.
+                // Up (90): x0, y-.
+                // Math: x = cos, y = -sin (because y is inverted)
+                
+                val labelX = centerX + Math.cos(angleRad).toFloat() * knobRadius * 0.7f
+                val labelY = centerY - Math.sin(angleRad).toFloat() * knobRadius * 0.7f - ((textPaint.descent() + textPaint.ascent()) / 2)
+                
+                val originalSize = textPaint.textSize
+                textPaint.textSize = 25f
+                canvas.drawText(label, labelX, labelY, textPaint)
+                textPaint.textSize = originalSize
+            }
+        }
     }
 }
 
@@ -122,8 +169,9 @@ class FlickIME: InputMethodService(), FlickeyActionListener{
     }
     override fun onCreateInputView(): View {
         Log.e("FlickIME", "onCreateInputView 진입")
-        val view = FlickeyView2(this, null)
-        Log.e("FlickIME", "Flickey 인스턴스 생성 완료")
+        val view = FlickeyLayout(this, null)
+        view.setActionListener(this)
+        Log.e("FlickIME", "FlickeyLayout 인스턴스 생성 완료")
         return view
     }
     override fun onTextInput(text: String?) {
@@ -135,11 +183,21 @@ class FlickIME: InputMethodService(), FlickeyActionListener{
     }
 
     override fun onShift() {
-        return
+        // Toggle caps lock or shift state if needed
     }
 
     override fun onEnter() {
-        return
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_ENTER))
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_ENTER))
     }
 
+    override fun onCursorLeft() {
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_LEFT))
+    }
+
+    override fun onCursorRight() {
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+        currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
 }
