@@ -12,6 +12,8 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
 
     private var keyboardState = KeyboardState()
     private var actionListener: FlickeyActionListener? = null
+    private val autocorrectManager = AutocorrectManager(context)
+    private var currentWord = StringBuilder()
 
     // UI Components
     private val btnLayerToggle: Button
@@ -24,6 +26,10 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
     private val knobVowel: FlickKnob
     private val knobPunctuation: FlickKnob
     private val keyboardRoot: LinearLayout
+    
+    private val btnSuggestion1: Button
+    private val btnSuggestion2: Button
+    private val btnSuggestion3: Button
 
     init {
         LayoutInflater.from(context).inflate(R.layout.layout_flickey, this, true)
@@ -38,6 +44,10 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
         knobConsonant = findViewById(R.id.knob_consonant)
         knobVowel = findViewById(R.id.knob_vowel)
         knobPunctuation = findViewById(R.id.knob_punctuation)
+        
+        btnSuggestion1 = findViewById(R.id.btn_suggestion_1)
+        btnSuggestion2 = findViewById(R.id.btn_suggestion_2)
+        btnSuggestion3 = findViewById(R.id.btn_suggestion_3)
 
         setupListeners()
         updateUI()
@@ -65,9 +75,24 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
         btnCursorLeft.setOnClickListener { actionListener?.onCursorLeft() }
         btnCursorRight.setOnClickListener { actionListener?.onCursorRight() }
 
+        // Suggestions
+        val onSuggestionClick: (String) -> Unit = { suggestion ->
+            if (suggestion.isNotEmpty() && currentWord.isNotEmpty()) {
+                // Delete current word
+                for (i in 0 until currentWord.length) {
+                    actionListener?.onDelete()
+                }
+                // Input suggested word with a space
+                applyInput(suggestion + " ")
+            }
+        }
+        btnSuggestion1.setOnClickListener { onSuggestionClick(btnSuggestion1.text.toString()) }
+        btnSuggestion2.setOnClickListener { onSuggestionClick(btnSuggestion2.text.toString()) }
+        btnSuggestion3.setOnClickListener { onSuggestionClick(btnSuggestion3.text.toString()) }
+
         // Knobs - Flicks
-        knobConsonant.onFlick = { text -> actionListener?.onTextInput(text) }
-        knobVowel.onFlick = { text -> actionListener?.onTextInput(text) }
+        knobConsonant.onFlick = { text -> applyInput(text) }
+        knobVowel.onFlick = { text -> applyInput(text) }
         knobPunctuation.onFlick = { text -> handlePunctuation(text) }
 
         // Knobs - Taps
@@ -79,17 +104,54 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
         }
         knobPunctuation.onTap = {
             // User requested: One tap on punctuation = Backspace or Delete
-            actionListener?.onDelete()
+            applyDelete()
         }
+    }
+
+    private fun applyInput(text: String?) {
+        if (text == null) return
+        actionListener?.onTextInput(text)
+        
+        // Update current word buffer (basic logic: assumes simple alphabetical appending)
+        // Reset if space or punctuation
+        if (text == " " || text == "\n" || !text.all { it.isLetter() }) {
+            currentWord.clear()
+        } else {
+            currentWord.append(text)
+        }
+        updateSuggestions()
+    }
+
+    private fun applyDelete() {
+        actionListener?.onDelete()
+        if (currentWord.isNotEmpty()) {
+            currentWord.deleteCharAt(currentWord.length - 1)
+        }
+        updateSuggestions()
+    }
+
+    private fun updateSuggestions() {
+        val word = currentWord.toString().trim()
+        if (word.isEmpty() || keyboardState.currentLayer != Layer.EN) {
+            btnSuggestion1.text = ""
+            btnSuggestion2.text = ""
+            btnSuggestion3.text = ""
+            return
+        }
+
+        val suggestions = autocorrectManager.getSuggestions(word)
+        btnSuggestion1.text = suggestions.getOrNull(0) ?: ""
+        btnSuggestion2.text = suggestions.getOrNull(1) ?: ""
+        btnSuggestion3.text = suggestions.getOrNull(2) ?: ""
     }
 
     private fun handlePunctuation(text: String) {
         when (text) {
-            "SPACE" -> actionListener?.onTextInput(" ")
-            "ENTER" -> actionListener?.onEnter()
-            "BACKSPACE" -> actionListener?.onDelete()
+            "SPACE" -> applyInput(" ")
+            "ENTER" -> { actionListener?.onEnter(); currentWord.clear(); updateSuggestions() }
+            "BACKSPACE" -> applyDelete()
             "SHIFT" -> actionListener?.onShift()
-            else -> actionListener?.onTextInput(text)
+            else -> applyInput(text)
         }
     }
 

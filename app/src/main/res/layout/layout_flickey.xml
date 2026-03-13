@@ -3,18 +3,77 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="250dp"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="#FFFFFF"
     android:id="@+id/keyboard_root">
 
-    <!-- Sidebar -->
+    <!-- Suggestion Bar -->
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
+        android:id="@+id/suggestion_bar"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:background="#EEEEEE"
+        android:paddingHorizontal="4dp">
+
+        <Button
+            android:id="@+id/btn_suggestion_1"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text=""
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginVertical="8dp"
+            android:background="#CCCCCC"/>
+
+        <Button
+            android:id="@+id/btn_suggestion_2"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text=""
+            android:textAllCaps="false"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            style="?android:attr/borderlessButtonStyle"/>
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:layout_marginVertical="8dp"
+            android:background="#CCCCCC"/>
+
+        <Button
+            android:id="@+id/btn_suggestion_3"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:text=""
+            android:textAllCaps="false"
+            android:textSize="16sp"
+            style="?android:attr/borderlessButtonStyle"/>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
         android:layout_weight="1"
-        android:orientation="vertical"
-        android:padding="4dp"
-        android:gravity="center_horizontal">
+        android:orientation="horizontal">
+
+        <!-- Sidebar -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:padding="4dp"
+            android:gravity="center_horizontal">
 
         <Button
             android:id="@+id/btn_layer_toggle"
@@ -101,4 +160,5 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    </LinearLayout>
 </LinearLayout>
