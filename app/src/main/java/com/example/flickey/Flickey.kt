@@ -16,6 +16,7 @@ interface FlickeyActionListener {
     fun onEnter()
     fun onCursorLeft()
     fun onCursorRight()
+    fun onDeleteCurrentWord()
 }
 
 class Flickey(context: Context, attrs: AttributeSet?) : View(context, attrs) {

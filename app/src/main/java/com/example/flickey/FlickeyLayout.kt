@@ -4,16 +4,25 @@ import android.content.Context
 import android.graphics.Color
 import android.util.AttributeSet
 import android.view.LayoutInflater
+import android.view.inputmethod.SurroundingText
 import android.widget.Button
 import android.widget.LinearLayout
 import androidx.constraintlayout.widget.ConstraintLayout
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(context, attrs) {
 
     private var keyboardState = KeyboardState()
     private var actionListener: FlickeyActionListener? = null
     private val autocorrectManager = AutocorrectManager(context)
-    private var currentWord = StringBuilder()
+    private val NextWordManager = NextWordManager(context)
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var predictJob: Job? = null
 
     // UI Components
     private val btnLayerToggle: Button
@@ -30,6 +39,9 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
     private val btnSuggestion1: Button
     private val btnSuggestion2: Button
     private val btnSuggestion3: Button
+
+    var surroundingCursorTextProvider: ((Int, Int) -> SurroundingText?)? = null
+    var beforeCursorTextProvider: ((Int) -> String)? = null
 
     init {
         LayoutInflater.from(context).inflate(R.layout.layout_flickey, this, true)
@@ -52,6 +64,72 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
         setupListeners()
         updateUI()
     }
+
+    private fun getSurroundingCursorText(n: Int, m: Int): SurroundingText? {
+        return surroundingCursorTextProvider?.invoke(n, m)
+    }
+
+    private fun getBeforeCursorText(n: Int): String? {
+        return beforeCursorTextProvider?.invoke(n)
+    }
+    private fun isWordChar(c: Char): Boolean {
+        return c.isLetterOrDigit() || c == '_' || c == '\''
+    }
+    private fun getCurrentWord(): String {
+        val surrounding = getSurroundingCursorText(20, 20) ?: return ""
+
+        val text = surrounding.text.toString()
+        if (text.isEmpty()) return ""
+
+        // selectionStart == selectionEnd 이면 보통 커서 위치
+        val cursor = surrounding.selectionStart.coerceIn(0, text.length)
+
+        var start = cursor
+        while (start > 0 && isWordChar(text[start - 1])) {
+            start--
+        }
+
+        var end = cursor
+        while (end < text.length && isWordChar(text[end])) {
+            end++
+        }
+
+        return text.substring(start, end)
+    }
+
+    private fun getLeftWords(leftwords: Int = 3, lookback: Int = 50): List<String> {
+        val text = getBeforeCursorText(lookback) ?: return emptyList()
+
+        val result = mutableListOf<String>()
+        var i = text.length - 1
+
+        while (i >= 0 && result.size < leftwords) {
+            // 1) 뒤쪽 공백/구두점 스킵
+            while (i >= 0 && !isWordChar(text[i])) {
+                i--
+            }
+
+            if (i < 0) break
+
+            // 2) 단어 끝
+            val end = i + 1
+
+            // 3) 단어 시작까지 이동
+            while (i >= 0 && isWordChar(text[i])) {
+                i--
+            }
+
+            val start = i + 1
+            val word = text.substring(start, end)
+
+            if (word.isNotBlank()) {
+                result.add(word)
+            }
+        }
+
+        return result.reversed()
+    }
+
 
     fun setActionListener(listener: FlickeyActionListener) {
         this.actionListener = listener
@@ -77,11 +155,9 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
 
         // Suggestions
         val onSuggestionClick: (String) -> Unit = { suggestion ->
-            if (suggestion.isNotEmpty() && currentWord.isNotEmpty()) {
+            if (suggestion.isNotEmpty()) {
                 // Delete current word
-                for (i in 0 until currentWord.length) {
-                    actionListener?.onDelete()
-                }
+                actionListener?.onDeleteCurrentWord()
                 // Input suggested word with a space
                 applyInput(suggestion + " ")
             }
@@ -114,41 +190,52 @@ class FlickeyLayout(context: Context, attrs: AttributeSet?) : LinearLayout(conte
         
         // Update current word buffer (basic logic: assumes simple alphabetical appending)
         // Reset if space or punctuation
-        if (text == " " || text == "\n" || !text.all { it.isLetter() }) {
-            currentWord.clear()
-        } else {
-            currentWord.append(text)
-        }
+        // results in bug when moving cursors so removed
         updateSuggestions()
     }
 
     private fun applyDelete() {
         actionListener?.onDelete()
-        if (currentWord.isNotEmpty()) {
-            currentWord.deleteCharAt(currentWord.length - 1)
-        }
         updateSuggestions()
     }
 
     private fun updateSuggestions() {
-        val word = currentWord.toString().trim()
-        if (word.isEmpty() || keyboardState.currentLayer != Layer.EN) {
+        fun clearSuggestions(){
             btnSuggestion1.text = ""
             btnSuggestion2.text = ""
             btnSuggestion3.text = ""
+        }
+        if (keyboardState.currentLayer != Layer.EN){
+            clearSuggestions()
             return
         }
+        val word = getCurrentWord()
 
-        val suggestions = autocorrectManager.getSuggestions(word)
-        btnSuggestion1.text = suggestions.getOrNull(0) ?: ""
-        btnSuggestion2.text = suggestions.getOrNull(1) ?: ""
-        btnSuggestion3.text = suggestions.getOrNull(2) ?: ""
+        if (word.isEmpty()){
+            val leftwords = getLeftWords()
+            if (leftwords.isEmpty()){
+                clearSuggestions()
+                return
+            }
+            predictJob?.cancel()
+            predictJob = scope.launch {
+                val suggestions = NextWordManager.getSuggestions(getBeforeCursorText(200)?:"")
+                btnSuggestion1.text = suggestions.getOrNull(0) ?: ""
+                btnSuggestion2.text = suggestions.getOrNull(1) ?: ""
+                btnSuggestion3.text = suggestions.getOrNull(2) ?: ""
+            }
+        } else {
+            val suggestions = autocorrectManager.getSuggestions(word)
+            btnSuggestion1.text = suggestions.getOrNull(0) ?: ""
+            btnSuggestion2.text = suggestions.getOrNull(1) ?: ""
+            btnSuggestion3.text = suggestions.getOrNull(2) ?: ""
+        }
     }
 
     private fun handlePunctuation(text: String) {
         when (text) {
             "SPACE" -> applyInput(" ")
-            "ENTER" -> { actionListener?.onEnter(); currentWord.clear(); updateSuggestions() }
+            "ENTER" -> { actionListener?.onEnter(); updateSuggestions() }
             "BACKSPACE" -> applyDelete()
             "SHIFT" -> actionListener?.onShift()
             else -> applyInput(text)

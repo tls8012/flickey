@@ -9,6 +9,7 @@ import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.view.inputmethod.SurroundingText
 import kotlin.math.atan2
 import kotlin.math.min
 
@@ -172,6 +173,12 @@ class FlickIME: InputMethodService(), FlickeyActionListener{
         val view = FlickeyLayout(this, null)
         view.setActionListener(this)
         Log.e("FlickIME", "FlickeyLayout 인스턴스 생성 완료")
+        view.surroundingCursorTextProvider = { n, m ->
+            currentInputConnection.getSurroundingText(n, m, 0)
+        }
+        view.beforeCursorTextProvider = { n ->
+            currentInputConnection?.getTextBeforeCursor(n, 0)?.toString() ?: ""
+        }
         return view
     }
     override fun onTextInput(text: String?) {
@@ -199,5 +206,35 @@ class FlickIME: InputMethodService(), FlickeyActionListener{
     override fun onCursorRight() {
         currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
         currentInputConnection?.sendKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_DPAD_RIGHT))
+    }
+
+    override fun onDeleteCurrentWord() {
+        val ic = currentInputConnection ?: return
+
+        val before = ic.getTextBeforeCursor(50, 0)?.toString().orEmpty()
+        val after = ic.getTextAfterCursor(50, 0)?.toString().orEmpty()
+
+        fun isWordChar(c: Char): Boolean {
+            return c.isLetterOrDigit() || c == '_' || c == '\''
+        }
+
+        var leftCount = 0
+        var i = before.length - 1
+        while (i >= 0 && isWordChar(before[i])) {
+            leftCount++
+            i--
+        }
+
+        // 커서 왼쪽이 단어가 아니면 현재 단어 없음으로 간주
+        if (leftCount == 0) return
+
+        var rightCount = 0
+        var j = 0
+        while (j < after.length && isWordChar(after[j])) {
+            rightCount++
+            j++
+        }
+
+        ic.deleteSurroundingText(leftCount, rightCount)
     }
 }
